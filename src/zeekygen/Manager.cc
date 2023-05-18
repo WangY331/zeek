@@ -128,11 +128,8 @@ void Manager::Script(const string& path)
 	if ( disabled )
 		return;
 
-	for ( const auto& ignored : ignored_plugins )
-		{
-		if ( path.find(ignored) != std::string::npos )
-			return;
-		}
+	if ( PathIgnored(path) )
+		return;
 
 	string name = normalize_script_path(path);
 
@@ -173,11 +170,8 @@ void Manager::ScriptDependency(const string& path, const string& dep)
 		// This is a @load directive on the command line.
 		return;
 
-	for ( const auto& ignored : ignored_plugins )
-		{
-		if ( path.find(ignored) != std::string::npos )
-			return;
-		}
+	if ( PathIgnored(path) )
+		return;
 
 	if ( dep.empty() )
 		{
@@ -214,11 +208,8 @@ void Manager::ModuleUsage(const string& path, const string& module)
 		// This is a module defined on the command line.
 		return;
 
-	for ( const auto& ignored : ignored_plugins )
-		{
-		if ( path.find(ignored) != std::string::npos )
-			return;
-		}
+	if ( PathIgnored(path) )
+		return;
 
 	string name = normalize_script_path(path);
 	ScriptInfo* script_info = scripts.GetInfo(name);
@@ -361,6 +352,9 @@ void Manager::RecordField(const zeek::detail::ID* id, const TypeDecl* field, con
 	if ( disabled )
 		return;
 
+	if ( PathIgnored(path) )
+		return;
+
 	IdentifierInfo* idd = identifiers.GetInfo(id->Name());
 
 	if ( ! idd )
@@ -386,6 +380,9 @@ void Manager::Redef(const zeek::detail::ID* id, const string& path, zeek::detail
 
 	if ( path == "<params>" )
 		// This is a redef defined on the command line.
+		return;
+
+	if ( PathIgnored(path) )
 		return;
 
 	IdentifierInfo* id_info = identifiers.GetInfo(id->Name());
@@ -468,6 +465,17 @@ string Manager::GetEnumTypeName(const string& id) const
 	{
 	map<string, string>::const_iterator it = enum_mappings.find(id);
 	return it == enum_mappings.end() ? "" : it->second;
+	}
+
+bool Manager::PathIgnored(const string& path) const
+	{
+	for ( const auto& ignored : ignored_plugins )
+		{
+		if ( path.find(ignored) != std::string::npos )
+			return true;
+		}
+
+	return false;
 	}
 
 	} // namespace zeek::zeekygen::detail

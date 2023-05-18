@@ -225,6 +225,8 @@ private:
 	IdentifierInfo* CreateIdentifierInfo(zeek::detail::IDPtr id, ScriptInfo* script,
 	                                     bool from_redef = false);
 
+	bool PathIgnored(const std::string& path) const;
+
 	bool disabled;
 	comment_buffer_t comment_buffer; // For whatever next identifier comes in.
 	comment_buffer_map_t comment_buffer_map; // For a particular identifier.
