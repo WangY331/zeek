@@ -84,6 +84,12 @@ Manager::Manager(const string& arg_config, const string& command)
 	// Internal error will abort above in the case that stat isn't initialized
 	// NOLINTNEXTLINE(clang-analyzer-core.uninitialized.Assign)
 	mtime = s.st_mtime;
+
+	const char* env_ignored_plugins = getenv("ZEEKYGEN_IGNORED_PLUGINS");
+	string ignored_plugins_str = env_ignored_plugins ? string(env_ignored_plugins) : "";
+	ignored_plugins = util::split(ignored_plugins_str, " ");
+	if ( ! ignored_plugins_str.empty() )
+		DBG_LOG(DBG_ZEEKYGEN, "Ignoring plugins: %s", ignored_plugins_str.c_str());
 	}
 
 Manager::~Manager()
@@ -121,6 +127,12 @@ void Manager::Script(const string& path)
 	{
 	if ( disabled )
 		return;
+
+	for ( const auto& ignored : ignored_plugins )
+		{
+		if ( path.find(ignored) != std::string::npos )
+			return;
+		}
 
 	string name = normalize_script_path(path);
 
@@ -161,6 +173,12 @@ void Manager::ScriptDependency(const string& path, const string& dep)
 		// This is a @load directive on the command line.
 		return;
 
+	for ( const auto& ignored : ignored_plugins )
+		{
+		if ( path.find(ignored) != std::string::npos )
+			return;
+		}
+
 	if ( dep.empty() )
 		{
 		DbgAndWarn(util::fmt("Empty Zeekygen script doc dependency: %s", path.c_str()));
@@ -195,6 +213,12 @@ void Manager::ModuleUsage(const string& path, const string& module)
 	if ( path == "<command line>" )
 		// This is a module defined on the command line.
 		return;
+
+	for ( const auto& ignored : ignored_plugins )
+		{
+		if ( path.find(ignored) != std::string::npos )
+			return;
+		}
 
 	string name = normalize_script_path(path);
 	ScriptInfo* script_info = scripts.GetInfo(name);

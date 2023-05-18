@@ -237,6 +237,7 @@ private:
 	std::map<std::string, std::string> enum_mappings; // enum id -> enum type id
 	Config config;
 	time_t mtime;
+	std::vector<std::string> ignored_plugins;
 	};
 
 template <class T>
