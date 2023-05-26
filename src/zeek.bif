@@ -4421,62 +4421,6 @@ function lookup_location%(a: addr%) : geo_location
 	return location;
 	%}
 
-## Performs an ASN lookup of an IP address.
-## Requires Zeek to be built with ``libmaxminddb``.
-##
-## a: The IP address to lookup.
-##
-## Returns: The number of the ASN that contains the IP address.
-##
-## .. zeek:see:: lookup_location lookup_autonomous_system
-function lookup_asn%(a: addr%) : count &deprecated="Remove in v6.1.  Functionality is now handled by lookup_autonomous_system()."
-	%{
-#ifdef USE_GEOIP
-	mmdb_check_asn();
-	if ( ! mmdb_asn )
-		{
-		if ( ! mmdb_try_open_asn() )
-			{
-			if ( ! did_mmdb_asn_db_error )
-				{
-				did_mmdb_asn_db_error = true;
-				zeek::emit_builtin_error("Failed to open GeoIP ASN database");
-				}
-
-			return zeek::val_mgr->Count(0);
-			}
-		}
-
-	MMDB_lookup_result_s result;
-
-	if ( mmdb_lookup_asn(a->AsAddr(), result) )
-		{
-		MMDB_entry_data_s entry_data;
-		int status;
-
-		// Get Autonomous System Number
-		status = MMDB_get_value(&result.entry, &entry_data,
-		                        "autonomous_system_number", nullptr);
-		auto asn = mmdb_getvalue(&entry_data, status, MMDB_DATA_TYPE_UINT32);
-		return asn == nullptr ? zeek::val_mgr->Count(0) : asn;
-		}
-
-#else // not USE_GEOIP
-	static int missing_geoip_reported = 0;
-
-	if ( ! missing_geoip_reported )
-		{
-		zeek::emit_builtin_error("Zeek was not configured for GeoIP ASN support");
-		missing_geoip_reported = 1;
-		}
-#endif
-
-	// We can get here even if we have GeoIP support, if we weren't
-	// able to initialize it or it didn't return any information for
-	// the address.
-	return zeek::val_mgr->Count(0);
-	%}
-
 ## Performs an lookup of AS number & organization of an IP address.
 ## Requires Zeek to be built with ``libmaxminddb``.
 ##
@@ -4720,21 +4664,11 @@ function disable_analyzer%(cid: conn_id, aid: count, err_if_no_conn: bool &defau
 		return zeek::val_mgr->False();
 		}
 
-	// Remove in v6.1: Global disabling_analyzer is to be removed.
-	static auto disabling_analyzer_hook = id::find_func("disabling_analyzer");
-	static auto analyzer_disabling_analyzer_hook = id::find_func("Analyzer::disabling_analyzer");
+	static auto disabling_analyzer_hook = id::find_func("Analyzer::disabling_analyzer");
 
 	if ( disabling_analyzer_hook )
 		{
 		auto hook_rval = disabling_analyzer_hook->Invoke(c->GetVal(), a->GetAnalyzerTag().AsVal(),
-		                                                 zeek::val_mgr->Count(aid));
-		if ( hook_rval && ! hook_rval->AsBool() )
-			return zeek::val_mgr->False();
-		}
-
-	if ( analyzer_disabling_analyzer_hook )
-		{
-		auto hook_rval = analyzer_disabling_analyzer_hook->Invoke(c->GetVal(), a->GetAnalyzerTag().AsVal(),
 		                                                 zeek::val_mgr->Count(aid));
 		if ( hook_rval && ! hook_rval->AsBool() )
 			return zeek::val_mgr->False();
