@@ -15,7 +15,7 @@
 # @TEST-EXEC: ! test -f logs/dns.log
 
 # Ensure rotated logs ends-up in the current working directory: This may change in the future.
-# @TEST-EXEC: cat ./conn-*.log ./dns-*.log > logs.cat
+# @TEST-EXEC: cat ./logs/conn-*.log ./logs/dns-*.log > logs.cat
 
 # @TEST-EXEC: TEST_DIFF_CANONIFIER=$SCRIPTS/diff-sort btest-diff out
 # @TEST-EXEC: btest-diff logs.cat
@@ -28,7 +28,7 @@ function my_rotation_postprocessor(info: Log::RotationInfo) : bool
 	return T;
 	}
 
-redef LogAscii::logdir = "./logs";
 redef LogAscii::enable_leftover_log_rotation = T;
+redef Log::default_logdir = "./logs";
 redef Log::default_rotation_interval = 1hr;
 redef Log::default_rotation_postprocessor_cmd = "echo";
