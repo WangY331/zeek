@@ -16,6 +16,7 @@
 #include "zeek/NetVar.h"
 #include "zeek/Reporter.h"
 #include "zeek/Scope.h"
+#include "zeek/ScriptUtils.h"
 #include "zeek/Traverse.h"
 #include "zeek/Trigger.h"
 #include "zeek/Var.h"
@@ -54,6 +55,7 @@ const char* stmt_name(StmtTag t)
 		"ZAM",
 		"ZAM-resumption",
 		"null",
+		"assert",
 	};
 
 	return stmt_names[int(t)];
@@ -1859,6 +1861,111 @@ TraversalCode NullStmt::Traverse(TraversalCallback* cb) const
 	{
 	TraversalCode tc = cb->PreStmt(this);
 	HANDLE_TC_STMT_PRE(tc);
+
+	tc = cb->PostStmt(this);
+	HANDLE_TC_STMT_POST(tc);
+	}
+
+AssertStmt::AssertStmt(ExprPtr arg_cond, ExprPtr arg_msg)
+	: Stmt(STMT_ASSERT), cond(std::move(arg_cond)), msg(std::move(arg_msg))
+	{
+	if ( ! IsBool(cond->GetType()->Tag()) )
+		cond->Error("conditional must be boolean");
+
+	if ( msg && ! IsString(msg->GetType()->Tag()) )
+		msg->Error("message must be string");
+	}
+
+ValPtr AssertStmt::Exec(Frame* f, StmtFlowType& flow)
+	{
+	RegisterAccess();
+	flow = FLOW_NEXT;
+
+	// TBD: would assertion_result be better to have a hook than can also
+	// count and report on successful assertions? Otherwise when an event
+	// isn't raised , it may not be clear that the assertions weren't actually
+	// executed.
+	static auto assertion_failure_hook = id::find_func("assertion_failure");
+
+	if ( auto cond_result = cond->Eval(f)->AsBool() )
+		return nullptr;
+
+	// Create the textual representation of cond from the AST.
+	// Not exactly the input text, but easy to do.
+	static zeek::ODesc desc;
+	desc.Clear();
+	desc.SetShort(1);
+	cond->Describe(&desc);
+
+	auto cond_val = zeek::make_intrusive<zeek::StringVal>(desc.Len(), (const char*)desc.Bytes());
+	auto msg_val = msg ? cast_intrusive<zeek::StringVal>(msg->Eval(f))
+	                   : zeek::val_mgr->EmptyString();
+
+	if ( assertion_failure_hook && assertion_failure_hook->HasEnabledBodies() )
+		{
+		auto bt = zeek::util::detail::get_current_script_backtrace();
+
+		// Stuff the assert's location into the backtrace vector so we do not
+		// need have extra args for the location of the the assert statement
+		// and also have direct access to the full backtrace.
+		//
+		// Alternative might be to have users use backtrace() within the hook,
+		// but we would need to push the assert's location onto the stack to make
+		// that work, too, and also users would need to jump over backtrace()
+		// and the hook handler to find the right location instead of just using
+		// the top.
+		auto assert_elem = zeek::util::detail::make_backtrace_element(
+			"assert", zeek::EmptyCallArgumentVector(), GetLocationInfo());
+		bt->Insert(0, assert_elem);
+
+		auto hook_rval = assertion_failure_hook->Invoke(cond_val, msg_val, bt);
+		if ( ! hook_rval->AsBool() )
+			{
+			// Doing this in an event handler just short circuits its execution
+			// but is otherwise is not harmful. If the hook didn't actually log
+			// something, this will also be silent.
+			throw InterpreterException();
+			}
+		}
+	else
+		{
+		// Default behavior of failing assertion: reporter->Error() and
+		// throwing of interpreter exception.
+		reporter->PushLocation(GetLocationInfo());
+		if ( msg_val->Len() > 0 )
+			reporter->Error("assertion failure: %s (%s)", msg_val->CheckString(),
+			                cond_val->CheckString());
+		else
+			reporter->Error("assertion failure %s", cond_val->CheckString());
+
+		reporter->PopLocation();
+		throw InterpreterException();
+		}
+
+	return nullptr;
+	}
+
+void AssertStmt::StmtDescribe(ODesc* d) const
+	{
+	// TODO
+	if ( d->IsReadable() )
+		DescribeDone(d);
+	else
+		AddTag(d);
+	}
+
+TraversalCode AssertStmt::Traverse(TraversalCallback* cb) const
+	{
+	TraversalCode tc = cb->PreStmt(this);
+	HANDLE_TC_STMT_PRE(tc);
+
+	tc = cond->Traverse(cb);
+	HANDLE_TC_STMT_PRE(tc);
+	if ( msg )
+		{
+		tc = msg->Traverse(cb);
+		HANDLE_TC_STMT_PRE(tc);
+		}
 
 	tc = cb->PostStmt(this);
 	HANDLE_TC_STMT_POST(tc);

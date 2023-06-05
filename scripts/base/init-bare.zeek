@@ -942,6 +942,20 @@ type BacktraceElement: record {
 ## .. zeek:see:: backtrace print_backtrace
 type Backtrace: vector of BacktraceElement;
 
+## A hook that is invoked with the result of an assert statement.
+##
+## Hook implementations should almost always use break statement to exit
+## from this handler. Not using break will result in script execution
+## continuing after a failing assert statement.
+##
+## cond: The string representation of the condition.
+##
+## msg: Message as string given to the assert statement.
+##
+## bt: Backtrace of the assertion error. The top element will be the
+##     assert statement that failed.
+type assertion_failure: hook(cond: string, msg: string, bt: Backtrace);
+
 # todo:: Do we still need these here? Can they move into the packet filter
 # framework?
 #
